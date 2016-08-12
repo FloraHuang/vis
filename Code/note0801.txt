@@ -1,0 +1,29 @@
+1.看懂可以引用的部分 少量修改然后替换到该放的位置
+2.一定不要修改太多因为人家是成熟的模型
+3.写了邮件之后去show给judy看 一定要说明自己的问题所以用了很多时间：
+									不乐意问自己搞了很久 沟通问题
+									推翻重来用了很多时间
+4.商量接下来要做的事情
+
+希望这些都在周二之前做好
+
+我并不关心是否匿名 也不关心名字 只需要authorID就够了
+
+reducedlogData = [120008432, 131234345, 2313246643, ...]
+timestamp : array
+indexArray : array 
+两个的每一个元素是对应的: exist j s.t. every i: timestamp[i] = reducedlogData[j], indexArray[i] = j
+
+是否该纪录所有的revID segID parantsegID
+no revID
+
+还有是否需要type？self others total 
+不需要 反正要找effectedSeg
+authorContribution可以需要 保留下来绘制每个作者的圆的半径 表示最终的文章中他的贡献
+然后link的宽度还是之前的想法 编辑别人的多少
+
+保留parentseg
+
+offset是干嘛的？
+
+所以1次循环就没了？？？

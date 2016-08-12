@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<html>
+<head>
+	<title>Visualization of Cooperation in Collaborative Writing</title>
+    <script src="jquery-3.1.0.js"></script>
+	<script src="https://d3js.org/d3.v3.min.js"></script>
+	<script src="underscore.js"></script>
+    <script src="WorkSimultaneously.js"></script>
+    <script type="text/javascript">
+    
+    var reader; //GLOBAL File Reader object for demo purpose only
+    /**
+     * Check for the various File API support.
+     */
+
+    function checkFileAPI() 
+    {
+        if (window.File && window.FileReader && window.FileList && window.Blob) 
+        {
+            reader = new FileReader();
+            return true; 
+        } 
+        else 
+        {
+            alert('The File APIs are not fully supported by your browser. Fallback required.');
+            return false;
+        }
+    }
+
+    function handleFileSelect(evt) {
+    var files = evt.target.files; // FileList object
+
+    // files is a FileList of File objects. List some properties.
+    var output = [];
+    for (var i = 0, f; f = files[i]; i++) {
+      output.push('<li><strong>', escape(f.name), '</strong> (', f.type || 'n/a', ') - ',
+                  f.size, ' bytes, last modified: ',
+                  f.lastModifiedDate.toLocaleDateString(), '</li>');
+    }
+    document.getElementById('list').innerHTML = '<ul>' + output.join('') + '</ul>';
+  }
+
+  document.getElementById('files').addEventListener('change', handleFileSelect, false);
+
+    </script>
+    <style type="text/css">
+        .link {
+            stroke: #000;
+        }
+        .node {
+            cursor: move;
+            stroke: #000;
+            stroke-width: 1.5px;
+        }
+
+        .node.fixed {
+          fill: #f00;
+        }
+      </style>
+</head>
+
+<body onload="checkFileAPI()">
+    <input type="file" onchange=handleFileSelect(this) id="files"/>
+    <output id="list"></output>
+</body>
+</html>

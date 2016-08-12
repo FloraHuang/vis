@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<html>
+<head>
+	<title>Visualization of Cooperation in Collaborative Writing</title>
+	<script src="https://d3js.org/d3.v3.min.js"></script>
+	<script src="underscore.js"></script>
+</head>
+<body>
+	<script type="text/javascript">
+
+        var color_fill = d3.scale.category20();
+        d3.json("D.json",function(error, data)
+        {
+        	if (error) throw error;
+            var author_list = [];
+            var author_relation=[];
+        // var color_fill = d3.scale.category20();
+
+        var changelog_text=data.changelog;
+
+        	//changelog_text是一个数组，每个元素是一个数组，代表一个edit。
+        	//每个edit也都是一个数组，...[0]表示操作，...[1]表示时间戳，...[2]表示author
+
+            for (var i=0; i <changelog_text.length; i++)
+            {
+                author_list =  check_new_author_assign_color(author_list,changelog_text[i][2]);
+            }
+            // _.each(changelog_text,function(each_edit, index){
+            //     timestamp_list.push(each_edit[1]);
+            //     check_new_author_assign_color(each_edit[2]);
+            // });
+
+            var authors_to_update_relation = [];
+
+            if ((author_list.length <= 1) || (changelog_text.length <=1))
+            {
+                // console.log("No co-working");
+            }
+
+            else
+            {
+                // console.log("Co-working!");
+                // console.log("Before manipulation, the author_relation is:");
+                // console.log(author_relation);
+
+                for( var i=0; i<changelog_text.length-1; i++)
+                {
+                    if (changelog_text[i+1][2] === changelog_text[i][2])
+                    {
+                        // console.log("same author in two edits. go to the next one.");
+                        continue;
+                    }
+
+                    else
+                    {
+                        if (changelog_text[i+1][1]-changelog_text[i][1]<420000)
+                        {
+                            if (authors_to_update_relation.length === 0) //即刚刚开始一个新的interval 就可以直接扔两个点进去
+                            {
+                                authors_to_update_relation.push(changelog_text[i][2]);
+                                authors_to_update_relation.push(changelog_text[i+1][2]);
+                            }
+
+                            else //旧的interval 所以要检查这两个点在不在这个interval里
+                            {
+                                var temp1=_.find(authors_to_update_relation, function(each)
+                                {
+                                    return each === changelog_text[i][2];
+                                });
+                                var temp2=_.find(authors_to_update_relation, function(each)
+                                {
+                                    return each === changelog_text[i+1][2];
+                                });
+                                
+                                if (typeof temp1 === "undefined")//一个新点进入 所以要更新这个点和之前interval里的其他点的连线宽度
+                                {
+                                    authors_to_update_relation.push(changelog_text[i][2]);
+                                }
+
+                                if (typeof temp2 === "undefined")//一个新点进入 所以要更新这个点和之前点的连线宽度
+                                {
+                                    authors_to_update_relation.push(changelog_text[i+1][2]);
+                                }
+                            }
+                        }
+                        else //新的interval开始了 所以把之前积累的所有边一次性添加然后清空数组
+                        {
+                            for (var j = 0; j<authors_to_update_relation.length-1; j++)
+                            {
+                                for (var k = j+1; k<authors_to_update_relation.length; k++)
+                                {
+                                    if(author_relation.length === 0)
+                                    {
+                                        author_relation.push({
+                                            source:authors_to_update_relation[j],
+                                            target:authors_to_update_relation[k],
+                                            count:1
+                                        });
+                                    }
+                                    else
+                                    {
+                                        var temp=_.find(author_relation, function(eachrelation)
+                                        {
+                                            return ((eachrelation.source===authors_to_update_relation[j] && eachrelation.target===authors_to_update_relation[k])||(eachrelation.source===authors_to_update_relation[k] && eachrelation.target===authors_to_update_relation[j]));
+                                        });
+                                        if (typeof temp === "undefined")
+                                        {
+                                            author_relation.push(
+                                            {
+                                                source:authors_to_update_relation[j],
+                                                target:authors_to_update_relation[k],
+                                                count:1   
+                                            });
+                                        }
+                                        else
+                                        {
+                                            _.find(author_relation, function(eachrelation)
+                                            {
+                                                if ((eachrelation.source===authors_to_update_relation[j] && eachrelation.target===authors_to_update_relation[k])||(eachrelation.source===authors_to_update_relation[k] && eachrelation.target===authors_to_update_relation[j]))
+                                                    eachrelation.count=eachrelation.count+1;
+                                            });
+                                        }
+                                    }
+                                }
+                            }
+                            authors_to_update_relation = [];
+                        }
+                    }
+                }
+            }
+
+
+            var w = 800, h = 800;
+            console.log(author_list);
+            console.log(author_relation);
+            var force=d3.layout.force()
+                .nodes(author_list)//加载节点数据
+                .links(author_relation)//加载边数据
+                .size([w,h])//设置有效空间的大小
+                .linkDistance(50)//连线的长度
+                // .charge(-200)//负电荷量，相互排斥设置的负值越大越排斥
+                ;//设置生效
+                
+
+                var svg=d3.select("body")
+                .append("svg")
+                .attr("width",w)
+                .attr("height",h);
+
+                var nodes=svg.selectAll("circle")
+                .data(author_list)
+                .enter()
+                .append("circle")
+                .attr("r",5)
+                .attr("cx",function(d){return d.x;})
+                .attr("cy",function(d){return d.y;})
+                .style("fill",function(d){
+                    return d.color;
+                })
+                ;
+            var edges=svg.selectAll("line")
+            .data(author_relation)
+            .enter()
+            .append("line")
+            .style("stroke", "#ff0000")
+            .style("stroke-width",function(d)
+            {//设置线的宽度
+                return d.count;
+            })
+            ;
+             //(5)打点更新，没有的话就显示不出来了
+             force.on("tick",function(){
+                //边
+                edges.attr("x1",function(d){
+                    console.log(d.source.x);
+                    return  d.source.x;
+                })
+                .attr("y1",function(d){
+                    return  d.source.y;
+                })
+                .attr("x2",function(d){
+                    return  d.target.x;
+                })
+                .attr("y2",function(d){
+                    return  d.target.y;
+                });
+
+                //节点
+                nodes.attr("cx",function(d){
+                    return d.x;
+                })
+                .attr("cy",function(d){
+                    return d.y;
+                });
+            });
+
+         });
+
+
+function check_new_author_assign_color(author_list,name_str)
+{
+    var flag=1;
+    var count=author_list.length;
+
+    if (count === 0)
+    {
+        author_list.push(
+        {
+            id:name_str,
+            color:color_fill(count)
+        });
+        return author_list;
+    }
+    else
+    {
+        for (var k=0; k<count; k++)
+        {
+            if (name_str === author_list[k].id)
+            {
+                flag=0;
+                return author_list;
+            }
+        }
+        if (flag === 1)
+        {
+            author_list.push(
+            {
+                id:name_str,
+                color: color_fill(count)
+            });
+            return author_list;
+        }
+    }
+}
+</script>
+</body>
+</html>

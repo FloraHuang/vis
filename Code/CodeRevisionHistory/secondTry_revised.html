@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<html>
+<head>
+	<title>Visualization of Cooperation in Collaborative Writing</title>
+	<script src="https://d3js.org/d3.v3.min.js"></script>
+	<script src="underscore.js"></script>
+</head>
+<body>
+	<script type="text/javascript">
+        var color_fill = d3.scale.category20();
+
+        var author_list = [];
+        var author_relation=[];
+
+        d3.json("D.json",function(error, data)
+        {
+        	if (error) throw error;
+
+        	var changelog_text=data.changelog;
+            console.log(changelog_text.length);
+        	//changelog_text是一个数组，每个元素是一个数组，代表一个edit。
+        	//每个edit也都是一个数组，...[0]表示操作，...[1]表示时间戳，...[2]表示author
+        	//对于每个edit都应该画一帧图像 然后让每帧图像自然地过渡
+
+            for (var i=0; i <changelog_text.length; i++)
+            {
+                check_new_author_assign_color(changelog_text[i][2]);
+            }
+            // _.each(changelog_text,function(each_edit, index){
+            //     timestamp_list.push(each_edit[1]);
+            //     check_new_author_assign_color(each_edit[2]);
+            // });
+            console.log(author_list);
+            var authors_to_update_relation = [];
+
+            if ((author_list.length === 1) || (changelog_text.length ===1))
+            {
+                console.log("No co-working");
+            }
+
+            else
+            {
+                console.log("Co-working!");
+                console.log("Before manipulation, the author_relation is:");
+                console.log(author_relation);
+
+                for( var i=0; i<changelog_text.length-1; i++)
+                {
+                    if (changelog_text[i+1][2] === changelog_text[i][2])
+                    {
+                        console.log("same author in two edits. go to the next one.");
+                        continue;
+                    }
+
+                    else
+                    {
+                        if (changelog_text[i+1][1]-changelog_text[i][1]<420000)
+                        {
+                            if (authors_to_update_relation.length === 0) //即刚刚开始一个新的interval 就可以直接扔两个点进去 然后加一个线
+                            {
+                                console.log("authors_to_update_relation.length === 0");
+                                authors_to_update_relation.push(changelog_text[i][2]);
+                                authors_to_update_relation.push(changelog_text[i+1][2]);
+                                console.log(authors_to_update_relation);
+
+                                if (author_relation.length === 0) //如果没有link直接添
+                                {
+                                    author_relation.push(
+                                    {
+                                        source:changelog_text[i][2],
+                                        target:changelog_text[i+1][2],
+                                        count:1
+                                    });
+                                    console.log("new link when author_relation.length = 0");
+                                }
+
+                                else //如果有link那找一下再添
+                                {
+                                    var temp = _.find(author_relation, function(eachrelation)
+                                    {
+                                        return ((eachrelation.source === changelog_text[i][2] && eachrelation.target === changelog_text[i+1][2]) || (eachrelation.source === changelog_text[i+1][2] && eachrelation.target === changelog_text[i][2])); 
+                                    });
+
+                                    if (typeof temp === "undefined") //没找到 则添加
+                                    {
+                                        author_relation.push(
+                                        {
+                                            source:changelog_text[i][2],
+                                            target:changelog_text[i+1][2],
+                                            count:1
+                                        });
+                                        console.log("new link when temp");
+                                    }
+                                    else //找到了 加count
+                                    {
+                                        _.find(author_relation, function(eachrelation)
+                                        {
+                                            if ((eachrelation.source === changelog_text[i][2] && eachrelation.target === changelog_text[i+1][2]) || (eachrelation.source === changelog_text[i+1][2] && eachrelation.target === changelog_text[i][2]))
+                                            {
+                                                eachrelation.count=eachrelation.count+1;
+                                                console.log("this count + 1!");
+                                            }
+                                        });
+                                    }
+                                }
+                            }
+
+                            else //旧的interval 所以要检查这两个点在不在这个interval里
+                            {
+                                var temp1=_.find(authors_to_update_relation, function(each)
+                                {
+                                    return each === changelog_text[i][2];
+                                });
+                                var temp2=_.find(authors_to_update_relation, function(each)
+                                {
+                                    return each === changelog_text[i+1][2];
+                                });
+                                
+                                if (typeof temp1 === "undefined")//一个新点进入 所以要更新这个点和之前interval里的其他点的连线宽度
+                                {
+                                    authors_to_update_relation.push(changelog_text[i][2]);
+                                    console.log(authors_to_update_relation);
+
+                                    for (var j = 0; j< authors_to_update_relation.length-1; j++)
+                                    {
+                                        var temp11 = _.find(author_relation, function(eachrelation)
+                                        {
+                                            return ((eachrelation.source === changelog_text[i][2] && eachrelation.target === authors_to_update_relation[j][2]) || (eachrelation.source === authors_to_update_relation[j][2] && eachrelation.target === changelog_text[i][2]));
+                                        });
+
+                                        if (typeof temp11 === "undefined")
+                                        {
+                                            author_relation.push(
+                                            {
+                                                source:changelog_text[i][2],
+                                                target:authors_to_update_relation[j][2],
+                                                count:1
+                                            });
+                                            console.log("new link when temp11");
+                                        }       
+                                        else
+                                        {
+                                            _.find(author_relation, function(eachrelation)
+                                            {
+                                                if ((eachrelation.source === changelog_text[i][2] && eachrelation.target === authors_to_update_relation[j][2]) || (eachrelation.source === authors_to_update_relation[j][2] && eachrelation.target === changelog_text[i][2]))
+                                                    eachrelation.count = eachrelation.count+1;
+                                            });
+                                        }   
+                                    }   
+                                }
+
+                                if (typeof temp2 === "undefined")//一个新点进入 所以要更新这个点和之前点的连线宽度
+                                {
+                                    authors_to_update_relation.push(changelog_text[i+1][2]);
+                                    console.log(authors_to_update_relation);
+
+                                    for (var k = 0; k< authors_to_update_relation.length-1; k++)
+                                    {
+                                        var temp22 = _.find(author_relation, function(eachrelation)
+                                        {
+                                            return ((eachrelation.source === changelog_text[i+1][2] && eachrelation.target === authors_to_update_relation[k][2]) || (eachrelation.source === authors_to_update_relation[k][2] && eachrelation.target === changelog_text[i+1][2]));
+                                        });
+
+                                        if (typeof temp22 === "undefined")
+                                        {
+                                            author_relation.push(
+                                            {
+                                                source:changelog_text[i+1][2],
+                                                target:authors_to_update_relation[k][2],
+                                                count:1
+                                            });
+                                            console.log("new link when temp22");
+                                        }       
+                                        else
+                                        {
+                                            _.find(author_relation, function(eachrelation)
+                                            {
+                                                if ((eachrelation.source === changelog_text[i+1][2] && eachrelation.target === authors_to_update_relation[k][2]) || (eachrelation.source === authors_to_update_relation[k][2] && eachrelation.target === changelog_text[i+1][2]))
+                                                    eachrelation.count = eachrelation.count+1;
+                                            });
+                                        }   
+                                    }   
+                                }
+                            }
+                        }
+                        else
+                        {
+                            console.log("clear");
+                            authors_to_update_relation = [];
+                        }
+                    }
+                }
+                console.log(author_relation);
+            }
+        });
+
+function check_new_author_assign_color(name_str)
+{
+    var flag=1;
+    var count=author_list.length;
+    if (count === 0)
+    {
+        author_list.push(
+        {
+            id:name_str,
+            color:color_fill(count)
+        });
+        return 1;
+    }
+    else
+    {
+        for (var k=0; k<count; k++)
+        {
+            if (name_str === author_list[k].id)
+            {
+                flag=0;
+                return 0;
+            }
+        }
+        if (flag === 1)
+        {
+            author_list.push(
+            {
+                id:name_str,
+                color: color_fill(count)
+            });
+            return 1;
+        }
+    }
+}
+</script>
+</body>
+</html>

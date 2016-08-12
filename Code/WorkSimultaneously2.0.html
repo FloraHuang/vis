@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<html>
+<head>
+	<title>Visualization of Cooperation in Collaborative Writing</title>
+    <script src="jquery-3.1.0.js"></script>
+	<script src="https://d3js.org/d3.v3.min.js"></script>
+	<script src="underscore.js"></script>
+    <script src="node_modules/bootstrap/js/tooltip.js"></script>
+    <style type="text/css">
+        .link {
+            stroke: #000;
+        }
+        .node {
+            cursor: move;
+            stroke: #000;
+            stroke-width: 1.5px;
+        }
+
+        p{
+            font-size: 80%;
+        }
+
+        .node.fixed {
+          fill: #f00;
+        }
+      </style>
+</head>
+<body>
+<h3>Visualization of How Frequently Authors Work Simultaneously in Collaborative Writing</h3>
+<p>
+    This visulization shows how frequently authors work simultaneously in collaborative writing.
+    <br>
+    Every node represents an author.
+    <br>
+    The link between two authors means that these two authors have worked simultaneously during the collaborative writing process. 
+    <br>
+    The wider the link, the more these two authors have worked simultaneously.
+</p>
+	
+    <script type="text/javascript">
+
+        var color_fill = d3.scale.category10();
+        var w = 500, h = 500;
+        var force=d3.layout.force()
+        .size([w,h])
+        .linkDistance(3000)
+        .charge(-1000)
+        .on("tick",tick);
+        ;
+
+        var drag = force.drag()
+        .on("dragstart", dragstart);
+
+        var svg = d3.select("body").append("svg")
+        .attr("width", w)
+        .attr("height", h);
+
+        var link = svg.selectAll(".link"),
+        node = svg.selectAll(".node");
+
+        var author_list = [];
+        var author_relation=[];
+
+        d3.json("JsonData/151-2011/151-2011 Business Cases/Changelog_Melting Pot- Business Case.json",function(error, data)
+        {
+        	if (error) throw error;
+
+
+        	var changelog_text=data.changelog;
+            console.log(changelog_text.length);
+
+        	//changelog_text是一个数组，每个元素是一个数组，代表一个edit。
+        	//每个edit也都是一个数组，...[0]表示操作，...[1]表示时间戳，...[2]表示author???
+
+            for (var i=0; i <changelog_text.length; i++)
+            {
+                author_list =  check_new_author_assign_color(author_list,changelog_text[i][2]);
+            }
+            // _.each(changelog_text,function(each_edit, index){
+            //     timestamp_list.push(each_edit[1]);
+            //     check_new_author_assign_color(each_edit[2]);
+            // });
+
+            _.each(changelog_text, function(entry)
+                {
+                    authorID = entry[2];
+                    command = entry[0];
+                    author_list = check_only_as(command, authorID, author_list);
+                });
+            for(var i = 0; i<author_list.length; i++)
+            {
+                if (author_list[i].only_as === 1)
+                    author_list.splice(i,1);
+            }
+
+            if ((author_list.length <= 1) || (changelog_text.length <=1))
+            {
+                console.log("No co-working");
+            }
+            else
+            {
+                var authors_to_update_relation = [];
+
+                for( var i=0; i<changelog_text.length-1; i++)
+                {
+                    var tempindex = _.findIndex(changelog_text, function(each, index)
+                        {
+                            return (index > i && check_do_is_ds(each[0])===1);
+                        });
+
+                    if (tempindex === -1)
+                    {
+                        console.log("error: can't find the valid edit!!!");
+                    }
+                    else
+                    {
+                        if (changelog_text[i][2] === changelog_text[tempindex][2])//作者相同
+                        {
+                            // console.log("same author in two nearest valid editing records");
+                            i = tempindex - 1;
+                            //这里没有直接跳到tempindex是因为在line105还要加一个1 
+                            //所以这里是tempindex－1 之后再加1 然后就对上号了
+                        }
+                        else//作者不同 再来check时间
+                        {
+                            if (changelog_text[tempindex][1] - changelog_text[i][1] < 420000)
+                            {
+                                if (authors_to_update_relation.length === 0) //即刚刚开始一个新的interval 就可以直接扔两个点进去
+                                {
+                                    authors_to_update_relation.push(changelog_text[i][2]);
+                                    authors_to_update_relation.push(changelog_text[tempindex][2]);
+                                }
+                                else //旧的interval 所以要检查这两个点在不在这个interval里
+                                {
+                                    var temp1=_.find(authors_to_update_relation, function(each)
+                                    {
+                                        return each === changelog_text[i][2];
+                                    });
+                                    var temp2=_.find(authors_to_update_relation, function(each)
+                                    {
+                                        return each === changelog_text[tempindex][2];
+                                    });
+                                    
+                                    if (typeof temp1 === "undefined")//一个新点进入 所以要更新这个点和之前interval里的其他点的连线宽度
+                                    {
+                                        authors_to_update_relation.push(changelog_text[i][2]);
+                                    }
+                                    if (typeof temp2 === "undefined")//一个新点进入 所以要更新这个点和之前点的连线宽度
+                                    {
+                                        authors_to_update_relation.push(changelog_text[tempindex][2]);
+                                    }
+                                }
+                            }
+                            else
+                            {
+                                if(authors_to_update_relation.length != 0)
+                                {
+                                    for (var j = 0; j<authors_to_update_relation.length-1; j++)
+                                    {
+                                        for (var k = j+1; k<authors_to_update_relation.length; k++)
+                                        {
+                                            if(author_relation.length === 0)
+                                            {
+                                                author_relation.push({
+                                                    source:authors_to_update_relation[j],
+                                                    target:authors_to_update_relation[k],
+                                                    count:1
+                                                });
+                                            }
+                                            else
+                                            {
+                                                var temp=_.find(author_relation, function(eachrelation)
+                                                {
+                                                    return ((eachrelation.source===authors_to_update_relation[j] && eachrelation.target===authors_to_update_relation[k])||(eachrelation.source===authors_to_update_relation[k] && eachrelation.target===authors_to_update_relation[j]));
+                                                });
+                                                if (typeof temp === "undefined")
+                                                {
+                                                    author_relation.push(
+                                                    {
+                                                        source:authors_to_update_relation[j],
+                                                        target:authors_to_update_relation[k],
+                                                        count:1   
+                                                    });
+                                                }
+                                                else
+                                                {
+                                                    _.find(author_relation, function(eachrelation)
+                                                    {
+                                                        if ((eachrelation.source===authors_to_update_relation[j] && eachrelation.target===authors_to_update_relation[k])||(eachrelation.source===authors_to_update_relation[k] && eachrelation.target===authors_to_update_relation[j]))
+                                                            eachrelation.count=eachrelation.count+1;
+                                                    });
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                                authors_to_update_relation = [];
+                            }
+                            i = tempindex - 1;
+                        }
+                    }
+                }
+            }
+
+
+            force.nodes(author_list).links(author_relation).start();
+
+            link = link.data(author_relation)
+            .enter().append("line")
+            .attr("class", "link")
+            .style("stroke-width",function(d){return 2*d.count;})
+            ;
+
+            node = node.data(author_list)
+            .enter().append("circle")
+            .attr("data-toggle","tooltip")
+            .attr("title", function(d){return d.id;})
+            .attr("class", "node")
+            .attr("r", 20)
+            .style("fill",function(d){return d.color;})
+            .on("dblclick", dblclick)
+            .call(drag);
+        });
+
+function tick() {
+  link.attr("x1", function(d) { 
+    var temp =_.find(author_list, function(each)
+    {
+        return each.id === d.source;
+    }
+    );
+    if (temp != "undefined")
+        return temp.x; })
+  .attr("y1", function(d) { var temp =_.find(author_list, function(each)
+    {
+        return each.id === d.source;
+    }
+    );
+  if (temp != "undefined")
+    return temp.y;})
+  .attr("x2", function(d) { var temp =_.find(author_list, function(each)
+    {
+        return each.id === d.target;
+    }
+    );
+  if (temp != "undefined")
+    return temp.x; })
+  .attr("y2", function(d) { var temp =_.find(author_list, function(each)
+    {
+        return each.id === d.target;
+    }
+    );
+  if (temp != "undefined")
+    return temp.y; });
+
+  node.attr("cx", function(d) { return d.x; })
+  .attr("cy", function(d) { return d.y; });
+}
+
+function dblclick(d) {
+  d3.select(this).classed("fixed", d.fixed = false);
+}
+
+function dragstart(d) {
+  d3.select(this).classed("fixed", d.fixed = true);
+}
+
+function check_new_author_assign_color(author_list,name_str)
+{
+    var flag=1;
+    var count=author_list.length;
+
+    if (count === 0)
+    {
+        author_list.push(
+        {
+            id:name_str,
+            color:color_fill(count),
+            only_as:1,
+            x:20*count,
+            y:50*count^3+Math.floor(Math.sqrt(100*count))
+        });
+        return author_list;
+    }
+    else
+    {
+        for (var k=0; k<count; k++)
+        {
+            if (name_str === author_list[k].id)
+            {
+                flag=0;
+                return author_list;
+            }
+        }
+        if (flag === 1)
+        {
+            author_list.push(
+            {
+                id:name_str,
+                color: color_fill(count),
+                only_as:1,
+                x: 20*count,
+                y: 50*count^3+Math.floor(Math.sqrt(100*count))
+            });
+            return author_list;
+        }
+    }
+}
+
+function check_only_as(entry, authorId, authorlist ) 
+{
+    var type = entry.ty;
+
+    if (type === 'mlti') {
+        _.each(entry.mts, function(ent) {
+            authorlist = check_only_as(ent, authorId, authorlist);
+        });
+    } else if (type === 'rplc') {
+        _.each(entry.snapshot, function(ent) {
+            segmentsArray = check_only_as(ent, authorId, authorlist);
+        });
+    } else if (type === 'rvrt') {
+        _.each(entry.snapshot, function(ent) {
+            segmentsArray = check_only_as(ent, authorId, authorlist);
+        });
+    } else if (type === 'is' || type === 'iss') {
+        _.find(authorlist, function(each)
+            {
+                if (each.id === authorId)
+                    each.only_as = 0;
+            });
+    } else if (type === 'ds' || type === 'dss') {
+        _.find(authorlist, function(each)
+            {
+                if (each.id === authorId)
+                    each.only_as = 0;
+            });
+    }
+    else {
+            // all other types such as AS (formatting)
+            // delete the author!!!
+        }
+        return authorlist;
+}
+
+function check_do_is_ds(edit)
+{
+    var mark = 0;
+    if (edit.ty === 'mlti')
+    {
+        _.find(edit.mts, function(eachitem)
+        {
+            if (eachitem.ty === 'is' || eachitem.ty === 'iss' || eachitem.ty === 'ds' || eachitem.ty === 'dss')
+                mark = 1;
+        });
+    }
+    else if (edit.ty === 'rplc' || edit.ty === 'rvrt')
+    {
+        _.find(edit.snapshot, function(eachitem)
+        {
+            if (eachitem.ty === 'is' || eachitem.ty === 'iss' || eachitem.ty === 'ds' || eachitem.ty === 'dss')
+                mark = 1;
+        });   
+    }
+    else if (edit.ty === 'is' || edit.ty === 'iss' || edit.ty === 'ds' || edit.ty === 'dss')
+    {
+        mark = 1;
+    }
+    else
+    {
+    }
+
+    return mark;
+}
+
+</script>
+</body>
+</html>

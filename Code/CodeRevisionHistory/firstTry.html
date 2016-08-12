@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<html>
+<head>
+    <title>Visualization of Author-Editing in Collaborative Writing</title>
+    <script src="https://d3js.org/d3.v3.min.js"></script>
+    <script src="underscore.js"></script>
+</head>
+<body>
+    <script type="text/javascript">
+        var w=800;
+        var h=800;
+        var svg = d3.select("body")
+                .append("svg")
+                .attr("width", w)
+                .attr("height", h);
+        var color = d3.scale.category20();
+        
+        var force = d3.layout.force()
+                    .size([w,h]);
+
+        var author_list = [];
+        var change_index = [];
+    
+        d3.json("Changelog_Team Awesome Possum Work Breakdown Structure (WBS).json",function(error, data)
+        {
+            if (error) throw error;
+
+            var changelog_text=data.changelog;
+            //changelog_text是一个数组，每个元素是一个数组，代表一个edit。
+            //每个edit也都是一个数组，...[0]表示操作，...[1]表示时间戳，...[2]表示author
+
+            // _.each(changelog_text, function(each_edit, index)
+            // {
+            //  check_new_author_assign_color(each_edit[2]);
+            //  rev_history_update_index_list(each_edit[0]);
+            // });
+            for (var i=0; i <changelog_text.length; i++)
+            {
+                check_new_author_assign_color(changelog_text[i][2]);
+            }
+
+            force
+                .nodes(author_list)
+                .on("tick",tick)
+                .start();
+
+            var links=force.links();
+            var link=svg.selectAll(".link");
+            var node = svg.selectAll(".node")
+                            .data(author_list)
+                            .enter()
+                            .append("circle")
+                            .attr("r",5)
+                            .style("fill",function(d){return d.color;})
+                            .call(force.drag);
+
+            var link = svg.selectAll(".link")
+                            .data(links)
+                            .enter()
+                            .append("line")
+                            .attr("stroke-width", function(d) { return Math.sqrt(d.count); });
+
+            for (var j=0; j<changelog_text.length; j++)
+            {
+                check_each_edit(changelog_text[j][0], changelog_text[j][2], links);
+            }
+        });
+
+function check_each_edit(each_edit, author, links) //判断type
+{
+    //each_edit is an object. no author information. no timestamp information.
+    var type=each_edit.ty;
+    var insertStartIndex = null,
+        deleteStartIndex = null,
+        deleteEndIndex = null;
+
+    if (type==='mlti')
+    {
+        _.each(each_edit.mts, function(ent){
+            check_each_edit(ent, author, links);
+        });
+    }
+    else if (type==='rplc')
+    {
+        _.each(each_edit.snapshot, function(ent){
+                check_each_edit(ent, author, links);
+        });
+    }
+    else if (type==='rvrt')
+    {
+        _.each(each_edit.snapshot, function(ent){
+            check_each_edit(ent, author, links);
+        });
+    }
+    else if (type === 'is' || type === 'iss')
+    {
+        insertStartIndex = each_edit.ibi - 1;
+        check_edit_status_when_insert(insertStartIndex, each_edit.s.length, author, links);
+    }
+    else if (type === 'ds' || type === 'dss')
+    {
+        deleteStartIndex = each_edit.si - 1;
+        deleteEndIndex = each_edit.ei - 1;
+        check_edit_status_when_delete(deleteStartIndex, deleteEndIndex, author, links);
+    }
+    else
+    {
+        //all the other types of editting
+    }
+}
+
+function check_edit_status_when_insert(start_index, str_length, insert_author, links)
+{
+    if (change_index.length === 0)
+    {
+        change_index.push({
+            start_index:start_index,
+            end_index:start_index + str_length - 1,
+            author: insert_author
+        });
+    } 
+    else
+    {
+        var i =0;
+        while ((change_index[i].start_index <= start_index) && (i<change_index.length))
+        {
+            i++;
+        }
+        edit_link_update(insert_author,i-1, links);
+        insert_interval_update(i-1, start_index, str_length, insert_author);
+    }
+}
+
+function check_edit_status_when_delete(start_index, end_index, author, links)
+{
+    if (change_index.length === 0)
+        console.log("Error when delete");
+    else
+    {
+        var i = 0;
+        while ((start_index >= change_index[i].start_index) && (i<change_index.length))
+        {
+            i++;
+        }
+
+        var j = i-1; //j的初始值是影响的第一个interval
+        edit_link_update(author, j, links);
+
+        while ((change_index[j].end_index < end_index) && (j<change_index.length))
+        {
+            j++;
+            edit_link_update(author, j, links);
+        }
+        delete_interval_update(i-1, j, start_index, end_index);
+    }
+}
+
+function insert_interval_update(insert_index, start_index, str_length, insert_author)
+{
+    if (start_index === change_index[insert_index].start_index)
+        //从某个interval的第一位开始插入
+    {
+        change_index.splice(insert_index, 1, 
+            {
+                start_index: start_index, 
+                end_index: start_index + str_length -1, 
+                author: insert_author
+            });
+        for (var t=insert_index+2; t<change_index.length; t++)
+        {
+            change_index[t].start_index = change_index[t].start_index + str_length;
+            change_index[t].end_index = change_index[t].end_index + str_length;
+        }
+    }
+    else
+        //从某个interval的非第一位开始插入
+    {
+        change_index.splice(insert_index, 1,
+        {
+            start_index: change_index[insert_index].start_index,
+            end_index: start_index-1,
+            author: change_index[insert_index].author
+        },
+        {
+            start_index: start_index,
+            end_index: start_index + str_length -1,
+            author: insert_author
+        },
+        {
+            start_index: start_index + str_length,
+            end_index: change_index[insert_index].end_index + str_length,
+            author: change_index[insert_index].author
+        });
+        for (var t = insert_index+3; t<change_index.length; t++)
+        {
+            change_index[t].start_index = change_index[t].start_index + str_length;
+            change_index[t].end_index = change_index[t].end_index + str_length;
+        }
+    }
+}
+
+function delete_interval_update(delete_start, delete_end, start_index, end_index)
+{
+    //删除别人的片段不会改变剩下未删除片段的作者
+    if (change_index[delete_start].start_index === start_index)
+    {
+        if (delete_start === delete_end)//只对一个元素进行操作 后面的元素都是顺延
+        {
+            if (change_index[delete_end].end_index === end_index) //如[6,10]删去[6,10]就变成这一段没有了 后面顺延 但是这里因为删除了一个所以数组后面的脚标变了
+            {
+                change_index.splice( delete_start, 1);
+                for (var i=delete_start; i<change_index.length; i++)
+                {
+                    change_index[i].start_index=change_index[i].start_index-(end_index-start_index+1);
+                    change_index[i].end_index=change_index[i].end_index-(end_index-start_index+1);
+                }
+            }
+            else//如[6,10]删去[6,8]就变成[6,7] 然后后面的所有index顺延
+            {
+                change_index[delete_end].end_index=change_index[delete_start].end_index-(end_index-start_index+1)
+                
+                for (var i=delete_start+1; i<change_index.length; i++)
+                {
+                    change_index[i].start_index=change_index[i].start_index-(end_index-start_index+1);
+                    change_index[i].end_index=change_index[i].end_index-(end_index-start_index+1);
+                }
+            }
+        }
+        else
+        {
+            if (change_index[delete_end].end_index === end_index)//相当于[4,5][6,8]要删除[4,8] 则删了直接顺延后面的
+            {
+                change_index.splice(delete_start, delete_end-delete_start+1);
+                //删了之后脚标也变了
+                for (var i = delete_start; i<change_index.length; i++)
+                {
+                    change_index[i].start_index=change_index[i].start_index-(end_index-start_index+1);
+                    change_index[i].end_index=change_index[i].end_index-(end_index-start_index+1);
+                }                
+            }
+            else //相当于[4,6][7,11]要删除[4,7] 最后应该变成[4,7]
+            {
+                change_index[delete_end].start_index=change_index[delete_start].start_index;
+                change_index[delete_end].end_index=change_index[delete_end].end_index-(end_index-start_index+1);
+                change_index.splice(delete_start, delete_end-delete_start);
+                for (var i=delete_start+1; i<change_index.length; i++)
+                {
+                    change_index[i].start_index=change_index[i].start_index-(end_index-start_index+1);
+                    change_index[i].end_index=change_index[i].end_index-(end_index-start_index+1);
+                }
+            }
+        }
+    }
+    else
+    {
+        if (delete_start===delete_end)
+        {
+            if (change_index[delete_end].end_index === end_index)//[0,3]删了[2,3]
+            {
+                change_index[delete_end].end_index = change_index[delete_end].end_index -(end_index-start_index+1);
+                for (var i = delete_start+1; i <change_index.length; i++)
+                {
+                    change_index[i].start_index=change_index[i].start_index-(end_index-start_index+1);
+                    change_index[i].end_index=change_index[i].end_index-(end_index-start_index+1);
+                }
+            }
+            else //[0,3]删了[2,2]最后剩[0,1][2,2]
+            {
+                var temp_author_name = change_index[delete_start].author;
+                var temp_index1_1 = change_index[delete_start].start_index;
+                var temp_index1_2 = start_index-1;
+                var temp_index2_1 = start_index;
+                var temp_index2_2 = change_index[delete_start].end_index-(end_index-start_index+1);
+                change_index.splice(delete_start, 1, 
+                    {
+                        start_index:temp_index1_1,
+                        end_index:temp_index1_2,
+                        author:temp_author_name
+                    },
+                    {
+                        start_index:temp_index2_1,
+                        end_index:temp_index2_2,
+                        author:temp_author_name
+                    });
+                for (var i = delete_start+2; i<change_index.length; i++)
+                {
+                    change_index[i].start_index=change_index[i].start_index-(end_index-start_index+1);
+                    change_index[i].end_index=change_index[i].end_index-(end_index-start_index+1);
+                }
+            }
+        }
+        else
+        {
+            if (change_index[delete_end].end_index === end_index) //[0,5][6,9]删了[3,9]最后剩[0,2] 后面的顺延
+            {
+                change_index[delete_start].end_index = start_index - 1;
+                change_index.splice(delete_start+1, delete_end-delete_start);
+                for (var i =delete_start+1 ; i<change_index.length; i++)
+                {
+                    change_index[i].start_index=change_index[i].start_index-(end_index-start_index+1);
+                    change_index[i].end_index=change_index[i].end_index-(end_index-start_index+1);
+                }
+            }
+            else//[0,5][6,9]删了[2,7]最后剩[0,1][2,3]
+            {
+                var temp_author_1=change_index[delete_start].author;
+                var temp_author_2=change_index[delete_end].author;
+                var temp_index1_1=change_index[delete_start].start_index;
+                var temp_index1_2=start_index-1;
+                var temp_index2_1=start_index;
+                var temp_index2_2=change_index[delete_end].end_index-(end_index-start_index+1);
+                change_index.splice(delete_start, delete_end-delete_start+1, 
+                    {
+                        start_index:temp_index1_1,
+                        end_index:temp_index1_2,
+                        author:temp_author_1
+                    },
+                    {
+                        start_index:temp_index2_1,
+                        end_index:temp_index2_2,
+                        author:temp_author_2
+                    });
+            }
+        }
+    }
+}
+
+function edit_link_update(author, edited_author_index, links)
+{
+    var temp_link = _.where(links, {source:author,target:change_index[edited_author_index].author});
+    if (typeof temp_link === undefined)
+    {
+        links.push({
+            source:author,
+            target:change_index[edited_author_index].author,
+            count:1
+        });
+    }
+    else
+    {
+        _.find(links, function(each_link){
+            if ((each_link.source === author) && (each_link.target === change_index[edited_author_index].author))
+                each_link.count=each_link.count+1;
+        });
+    }
+    // var link = svg.selectAll(".link")                        
+    //                 .data(links)
+    //                 .enter()
+    //                 .append("line")
+    //                 .attr("stroke-width", function(d) { return Math.sqrt(d.count); });
+    force.start();
+}
+
+function check_new_author_assign_color(name_str)
+{
+    var flag=1;
+    var count=author_list.length;
+    if (count === 0)//即此时还没有author在列表里
+    {
+        author_list.push(
+        {
+            id:name_str,
+            color:color[count]
+        });
+        return 1;
+    }
+    else
+    {
+        for (var i=0; i<count; i++)
+        {
+            if (name_str === author_list[i].id)
+            {
+                flag=0;
+                return 0;
+            }
+        }
+        if (flag === 1)
+        {
+            author_list.push(
+            {
+                id:name_str,
+                color: color[count]
+            });
+            return 1;
+        }
+    }
+    redraw();
+}
+
+function tick() 
+{
+  link.attr("x1", function(d) { return d.source.x; })
+      .attr("y1", function(d) { return d.source.y; })
+      .attr("x2", function(d) { return d.target.x; })
+      .attr("y2", function(d) { return d.target.y; });
+
+  node.attr("cx", function(d) { return d.x; })
+      .attr("cy", function(d) { return d.y; });
+}
+    </script>
+}
+</body>
+</html>

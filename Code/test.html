@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<script src="underscore.js"></script>
+</head>
+<body>
+<script>
+	var a = [1,2,3,4,5,6,7,11,13,10,23,34,56];
+	console.log(a);
+	var result =_.findIndex(a, function(each, index)
+		{
+			return ((each%2 === 0)&&(index > 5));
+		});
+	console.log(result);
+
+	// for (var i = 0; i<20; i++)
+	// {
+	// 	console.log(i);
+	// 	if (i % 3 === 0)
+	// 	{
+	// 		i = i + 4;
+	// 		continue;
+	// 	}
+	// }
+
+
+
+</script>
+</body>
+</html>

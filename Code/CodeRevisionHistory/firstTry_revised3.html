@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<html>
+<head>
+    <title>Visualization of Author-Editing in Collaborative Writing</title>
+    <script src="jquery-3.1.0.js"></script>
+    <script src="https://d3js.org/d3.v3.min.js"></script>
+    <script src="underscore.js"></script>
+    <script src="bundle.js"></script>
+    <script src="functionsforVis.js"></script>
+    <style type="text/css">
+        .link {
+            stroke: #000;
+        }
+        .node {
+            cursor: move;
+            stroke: #000;
+            stroke-width: 1.5px;
+        }
+
+        .node.fixed {
+          fill: #f00;
+        }
+      </style>
+</head>
+<body>
+    <script type="text/javascript">
+        var color_fill = d3.scale.category20();
+        // var async = require('async');
+
+        
+
+        var author_list = [];
+        var author_relation =[];
+        var segmentsArray = [];
+        var currentSegID = 0;
+        var countloop=0;
+
+        d3.json("B.json",function(error, data)
+        {
+            if (error) throw error;
+
+            var changelog_text = data.changelog;
+
+            console.log(changelog_text.length);
+
+            var authorID = null, 
+                command = null;
+
+            for (var i=0; i <changelog_text.length; i++)
+            {
+                author_list =  check_new_author_assign_color(author_list,changelog_text[i][2]);
+            }
+            //changelog_text是一个数组，每个元素是一个数组，代表一个edit。
+            //每个edit也都是一个数组，...[0]表示操作，...[1]表示时间戳，...[2]表示author
+            // async.eachSeries(changelog_text, function (entry)
+            _.each(changelog_text, function(entry, callBack)
+            	{
+                    countloop+=1;
+            		authorID = entry[2];
+            		command = entry[0];
+            		
+            		segmentsArray = analyzeEachEditInChangelog(command, authorID, currentSegID);
+            	});
+
+            for (var i = 0; i < segmentsArray.length; i++)            
+            {
+                if (segmentsArray[i].sindex > segmentsArray[i].eindex)
+                {
+                    console.log("ERROR!!!");
+                }
+            }
+        });        
+
+function check_new_author_assign_color(author_list,name_str)
+{
+	var flag=1;
+	var count=author_list.length;
+
+	if (count === 0)
+	{
+		author_list.push(
+		{
+			id:name_str,
+			color:color_fill(count),
+			x:20*count,
+			y:50*count^3+Math.floor(Math.sqrt(1000*count))
+		});
+	}
+	else
+	{
+		for (var k=0; k<count; k++)
+		{
+			if (name_str === author_list[k].id)
+			{
+				flag=0;
+			}
+		}
+		if (flag === 1)
+		{
+			author_list.push(
+			{
+				id:name_str,
+				color: color_fill(count),
+				x: 20*count,
+				y: 50*count^3+Math.floor(Math.sqrt(1000*count))
+			});
+		}
+	}
+	return author_list;
+}
+    </script>
+</body>
+</html>

@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<html>
+<head>
+	<title>Visualization of Cooperation in Collaborative Writing</title>
+	<script src="https://d3js.org/d3.v3.min.js"></script>
+	<script src="underscore.js"></script>
+</head>
+<body>
+	<script type="text/javascript">
+		var w=800;
+		var h=800;
+		var svg = d3.select("body")
+                .append("svg")
+                .attr("width", w)
+                .attr("height", h);
+        var color_fill = d3.scale.category20();
+        var force = d3.layout.force()
+                    .size([w,h]);
+
+        var author_list = [];
+
+        d3.json("B.json",function(error, data)
+        {
+        	if (error) throw error;
+
+            var timestamp_list=[],
+                period_list=[];
+        	var changelog_text=data.changelog;
+        	//changelog_text是一个数组，每个元素是一个数组，代表一个edit。
+        	//每个edit也都是一个数组，...[0]表示操作，...[1]表示时间戳，...[2]表示author
+        	//对于每个edit都应该画一帧图像 然后让每帧图像自然地过渡
+console.log(changelog_text);
+            for (var i=0; i <changelog_text.length; i++)
+            {
+                timestamp_list.push(changelog_text[i][1]);
+                check_new_author_assign_color(changelog_text[i][2]);
+            }
+            
+            // _.each(changelog_text,function(each_edit, index){
+            //     timestamp_list.push(each_edit[1]);
+            //     check_new_author_assign_color(each_edit[2]);
+            // });
+            
+            force
+                .nodes(author_list)
+                // .on("tick",tick)
+                .start();
+
+            var sign=0,
+                j=0;
+                period_list[sign]=[];
+            period_list[sign].push(0);
+            do{
+                if (timestamp_list[j+1]-timestamp_list[j]>420000)
+                {
+                    sign++;
+                    period_list[sign]=[];
+                }
+                j++;
+                period_list[sign].push(j);
+            }while (j<timestamp_list.length-1);
+
+// console.log(period_list);
+
+            //timestamp_lish是一个数组 [20123427342, 2012323297, ... ]
+            //而period_list是一个数组 每个元素也是一个数组 存的都是index 类似于[[0,1,2],[3],[4,5,6,7]...]这样的形式
+          
+            var nodes = svg.selectAll("circle")
+                    .data(author_list)
+                    .enter()
+                    .append("circle")
+                    .attr("r",5)
+                    .attr("cx",function(d,i){return w*i/author_list.length})
+                    .attr("cy",function(d,i){return h*i/author_list.length})
+                    .style("fill",function(d){return d.color;})
+                    // .call(force.drag)
+                    ;
+
+            var links=[];
+
+            for (var a=0; a<period_list.length; a++)
+            {
+                var new_nodes=[];
+                // console.log(new_nodes);
+                for (var b=0; b<period_list[a].length; b++)
+                {
+                    var temp=period_list[a][b];
+                    if(new_nodes.length === 0 ){
+                        var author = _.find(author_list,function(eachauthor)
+                        {
+                            return (eachauthor.id===changelog_text[temp][2]);
+                        });
+                        new_nodes.push(author);
+                    }
+                    else{
+                        if(_.find(new_nodes, function(eachauthor)
+                        {
+                            // console.log(eachauthor);
+
+                            return changelog_text[temp][2] === eachauthor.id;
+                        }) === undefined){
+                            var author = _.find(author_list,function(eachauthor)
+                            {
+                                return (eachauthor.id===changelog_text[temp][2]);
+                            });
+                            new_nodes.push(author);
+                        }
+                        else{
+                            console.log("find one " + temp);
+                        }
+                    }
+
+
+
+                    // if (typeof (_.find(new_nodes, function(eachauthor)
+                    //     {
+
+                    //         return changelog_text[temp][2] === eachauthor.id
+                    //     }
+                    // )) === undefined )
+                    // {
+                    //     new_nodes.push(_.find(author_list,function(eachauthor)
+                    //     {
+                    //         return (eachauthor.id===changelog_text[temp][2]);
+                    //     }));
+                    // }
+                }//也就是同一时间段里有 authorA authorB authorA这样的情况就不用画新的线
+                // console.log(new_nodes);
+                update_links(new_nodes); 
+                // console.log(new_nodes);
+            }
+        });
+
+function check_new_author_assign_color(name_str)
+{
+    var flag=1;
+    var count=author_list.length;
+    if (count === 0)
+    {
+        author_list.push(
+        {
+            id:name_str,
+            color:color_fill(count)
+        });
+        return 1;
+    }
+    else
+    {
+        for (var k=0; k<count; k++)
+        {
+            if (name_str === author_list[k].id)
+            {
+                flag=0;
+                return 0;
+            }
+        }
+        if (flag === 1)
+        {
+            author_list.push(
+            {
+                id:name_str,
+                color: color_fill(count)
+            });
+            return 1;
+        }
+    }
+}
+
+function update_links(nodes_array)
+{
+    for (var c=0; c<nodes_array.length-1; c++)
+    {
+        for (var d=c+1; d<nodes_array.length; d++)
+        {
+            var temp1=_.findWhere(links, {source:nodes_array[c].id, target:nodes_array[d].id});
+            var temp2=_.findWhere(links, {source:nodes_array[d].id, target:nodes_array[c].id});
+            if (typeof temp1 === "undefined" && typeof temp2 === "undefined")
+                links.push({
+                    source:nodes_array[c].id,
+                    target:nodes_array[d].id,
+                    count:1
+                });
+            else
+            {
+                _.find(links,function(eachlink)
+                    {
+                        if ((eachlink.source === nodes_array[c].id && eachlink.target === nodes_array[d].id)
+                            ||(eachlink.source === nodes_array[d].id && eachlink.target === nodes_array[c].id))
+                        eachlink.count=eachlink.count+1;
+                    });
+            }
+        }
+    }
+    var link = svg.selectAll(".link")                        
+                    .data(links)
+                    .enter()
+                    .append("line")
+                    .attr("stroke-width", function(d) { return Math.sqrt(d.count); });
+    force.start();
+                //start drawing updated links
+}
+
+// function tick() 
+// {
+// //   link.attr("x1", function(d) { return d.source.x; })
+// //       .attr("y1", function(d) { return d.source.y; })
+// //       .attr("x2", function(d) { return d.target.x; })
+// //       .attr("y2", function(d) { return d.target.y; });
+
+//   node.attr("cx", function(d) { return d.x; })
+//       .attr("cy", function(d) { return d.y; });
+// }
+	</script>
+</body>
+</html>

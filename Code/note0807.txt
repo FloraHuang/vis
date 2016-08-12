@@ -1,0 +1,12 @@
+所以最后一个interval里找时间差符合条件的会有问题 这里返回值不是undefined而是－1
+
+只要找到一个－1则说明从当前的i开始 之后所有的都是unvalid edit
+
+现在依然有漏掉的同时工作的pair eg. G5_bussiness case
+
+如何区分两条方向不同的线
+
+在加上other 和 self两个统计信息后不完全正确 出现了NaN的字样
+
+Changelog_[INF 151] Team Awesome Possum Bussiness Case 里面Jingwen Zhang 0 edit of self && 0 edit of other && 0 total edit & 0 contribution
+why she was displayed in docuviz?
